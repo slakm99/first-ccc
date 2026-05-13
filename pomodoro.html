@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>番茄钟 - Pomodoro Timer</title>
+<style>
+  :root {
+    --focus: #e74c3c;
+    --short-break: #2ecc71;
+    --long-break: #3498db;
+    --bg: #1a1a2e;
+    --card: #16213e;
+    --text: #eee;
+    --muted: #999;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    user-select: none;
+  }
+
+  .app {
+    text-align: center;
+    padding: 40px 30px;
+    max-width: 420px;
+    width: 100%;
+  }
+
+  h1 {
+    font-size: 1.6rem;
+    font-weight: 600;
+    margin-bottom: 24px;
+    letter-spacing: 2px;
+    color: var(--muted);
+  }
+
+  /* 模式切换 */
+  .tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 30px;
+    background: var(--card);
+    border-radius: 12px;
+    padding: 4px;
+  }
+
+  .tab {
+    flex: 1;
+    padding: 10px 8px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 0.82rem;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.25s;
+    font-family: inherit;
+    white-space: nowrap;
+  }
+
+  .tab.active {
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+    font-weight: 600;
+  }
+
+  .tab:not(.active):hover {
+    color: #ccc;
+  }
+
+  /* 进度环 */
+  .ring-container {
+    position: relative;
+    width: 280px;
+    height: 280px;
+    margin: 0 auto 30px;
+  }
+
+  .ring-container svg {
+    transform: rotate(-90deg);
+  }
+
+  .ring-bg {
+    fill: none;
+    stroke: var(--card);
+    stroke-width: 8;
+  }
+
+  .ring-progress {
+    fill: none;
+    stroke: var(--focus);
+    stroke-width: 8;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.3s linear;
+  }
+
+  .timer-text {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .time {
+    font-size: 4rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 2px;
+  }
+
+  .status-label {
+    font-size: 0.9rem;
+    color: var(--muted);
+    margin-top: 4px;
+    letter-spacing: 1px;
+  }
+
+  /* 按钮 */
+  .controls {
+    display: flex;
+    gap: 14px;
+    justify-content: center;
+    margin-bottom: 28px;
+  }
+
+  .btn {
+    padding: 12px 32px;
+    border: none;
+    border-radius: 28px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+    letter-spacing: 1px;
+  }
+
+  .btn:active {
+    transform: scale(0.95);
+  }
+
+  .btn-primary {
+    background: #fff;
+    color: #1a1a2e;
+    min-width: 120px;
+  }
+
+  .btn-primary:hover {
+    background: #e0e0e0;
+  }
+
+  .btn-secondary {
+    background: var(--card);
+    color: var(--text);
+  }
+
+  .btn-secondary:hover {
+    background: #1f2d4a;
+  }
+
+  /* 统计 */
+  .stats {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+
+  .stats span {
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  /* 当前模式对应的环颜色 */
+  .mode-focus .ring-progress { stroke: var(--focus); }
+  .mode-focus .btn-primary { background: var(--focus); color: #fff; }
+  .mode-focus .btn-primary:hover { background: #c0392b; }
+
+  .mode-short .ring-progress { stroke: var(--short-break); }
+  .mode-short .btn-primary { background: var(--short-break); color: #fff; }
+  .mode-short .btn-primary:hover { background: #27ae60; }
+
+  .mode-long .ring-progress { stroke: var(--long-break); }
+  .mode-long .btn-primary { background: var(--long-break); color: #fff; }
+  .mode-long .btn-primary:hover { background: #2980b9; }
+
+  footer {
+    margin-top: 50px;
+    color: #555;
+    font-size: 0.75rem;
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <h1>番茄钟</h1>
+
+  <!-- 模式切换 -->
+  <div class="tabs">
+    <button class="tab active" data-mode="focus">专注</button>
+    <button class="tab" data-mode="short">短休息</button>
+    <button class="tab" data-mode="long">长休息</button>
+  </div>
+
+  <!-- 进度环 -->
+  <div class="ring-container" id="ringContainer">
+    <svg width="280" height="280" viewBox="0 0 280 280">
+      <circle class="ring-bg" cx="140" cy="140" r="124" />
+      <circle class="ring-progress" id="ringProgress" cx="140" cy="140" r="124"
+              stroke-dasharray="779.11" stroke-dashoffset="0" />
+    </svg>
+    <div class="timer-text">
+      <div class="time" id="timeDisplay">25:00</div>
+      <div class="status-label" id="statusLabel">准备开始</div>
+    </div>
+  </div>
+
+  <!-- 控制按钮 -->
+  <div class="controls">
+    <button class="btn btn-primary" id="btnToggle">开始</button>
+    <button class="btn btn-secondary" id="btnReset">重置</button>
+  </div>
+
+  <!-- 统计 -->
+  <div class="stats">
+    <div>本轮番茄：<span id="countSessions">0</span></div>
+    <div>今日完成：<span id="countToday">0</span></div>
+  </div>
+
+  <footer>每完成 4 个番茄后进入长休息</footer>
+</div>
+
+<script>
+const CIRCUMFERENCE = 2 * Math.PI * 124; // ~779.11
+
+// 模式配置：分钟数
+const MODES = {
+  focus:  { min: 25, label: '专注中' },
+  short:  { min: 5,  label: '短休息' },
+  long:   { min: 15, label: '长休息' },
+};
+
+let currentMode = 'focus';
+let totalSeconds = MODES.focus.min * 60;
+let remaining = totalSeconds;
+let timerId = null;
+let running = false;
+let sessionCount = 0;      // 本轮番茄数（用于判断是否长休息）
+let todayCount = loadTodayCount();
+let audioCtx = null;       // 延迟初始化 AudioContext
+
+// DOM
+const $time = document.getElementById('timeDisplay');
+const $status = document.getElementById('statusLabel');
+const $ring = document.getElementById('ringProgress');
+const $ringContainer = document.getElementById('ringContainer');
+const $btnToggle = document.getElementById('btnToggle');
+const $btnReset = document.getElementById('btnReset');
+const $countSessions = document.getElementById('countSessions');
+const $countToday = document.getElementById('countToday');
+const $tabs = document.querySelectorAll('.tab');
+
+// ── 初始化 ──
+updateDisplay();
+updateRing();
+
+// ── 模式切换 ──
+$tabs.forEach(tab => {
+  tab.addEventListener('click', () => {
+    if (running) return; // 运行中不允许切换
+    currentMode = tab.dataset.mode;
+    $tabs.forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    totalSeconds = MODES[currentMode].min * 60;
+    remaining = totalSeconds;
+    updateDisplay();
+    updateRing();
+    updateModeClass();
+    $status.textContent = '准备开始';
+  });
+});
+
+updateModeClass();
+
+// ── 开始/暂停 ──
+$btnToggle.addEventListener('click', () => {
+  if (running) {
+    pause();
+  } else {
+    start();
+  }
+});
+
+// ── 重置 ──
+$btnReset.addEventListener('click', () => {
+  pause();
+  remaining = totalSeconds;
+  updateDisplay();
+  updateRing();
+  $status.textContent = '准备开始';
+});
+
+// ── 开始计时 ──
+function start() {
+  if (remaining <= 0) {
+    remaining = totalSeconds;
+    updateRing();
+  }
+
+  // 首次用户交互时初始化 AudioContext
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+
+  running = true;
+  $btnToggle.textContent = '暂停';
+  $status.textContent = MODES[currentMode].label;
+  timerId = setInterval(tick, 1000);
+}
+
+// ── 暂停 ──
+function pause() {
+  running = false;
+  $btnToggle.textContent = '开始';
+  $status.textContent = '已暂停';
+  if (timerId) {
+    clearInterval(timerId);
+    timerId = null;
+  }
+}
+
+// ── 每秒 ──
+function tick() {
+  if (remaining > 0) {
+    remaining--;
+    updateDisplay();
+    updateRing();
+    return;
+  }
+
+  // 时间到
+  clearInterval(timerId);
+  timerId = null;
+  running = false;
+  $btnToggle.textContent = '开始';
+  $status.textContent = '完成！';
+  playBeep();
+
+  if (currentMode === 'focus') {
+    sessionCount++;
+    todayCount++;
+    saveTodayCount();
+    $countSessions.textContent = sessionCount;
+    $countToday.textContent = todayCount;
+
+    // 每4个番茄 → 长休息，否则短休息
+    if (sessionCount % 4 === 0) {
+      switchMode('long');
+    } else {
+      switchMode('short');
+    }
+  } else {
+    // 休息结束 → 回到专注
+    switchMode('focus');
+  }
+}
+
+// ── 切换模式（自动） ──
+function switchMode(mode) {
+  currentMode = mode;
+  totalSeconds = MODES[mode].min * 60;
+  remaining = totalSeconds;
+  updateDisplay();
+  updateRing();
+  updateModeClass();
+
+  // 同步 tab 高亮
+  $tabs.forEach(t => {
+    t.classList.remove('active');
+    if (t.dataset.mode === mode) t.classList.add('active');
+  });
+
+  $status.textContent = '准备开始';
+
+  // 自动开始下一阶段
+  setTimeout(() => {
+    if (!running) start();
+  }, 800);
+}
+
+// ── 更新数字显示 ──
+function updateDisplay() {
+  const m = Math.floor(remaining / 60);
+  const s = remaining % 60;
+  $time.textContent = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+  document.title = $time.textContent + ' - 番茄钟';
+}
+
+// ── 更新进度环 ──
+function updateRing() {
+  const progress = remaining / totalSeconds;
+  $ring.setAttribute('stroke-dashoffset', CIRCUMFERENCE * (1 - progress));
+}
+
+// ── 更新模式颜色 ──
+function updateModeClass() {
+  $ringContainer.className = 'ring-container mode-' + currentMode;
+}
+
+// ── 提示音 ──
+function playBeep() {
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+  [0, 0.15, 0.3].forEach((delay, i) => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = 'sine';
+    osc.frequency.value = i === 0 ? 880 : i === 1 ? 1100 : 1320;
+    gain.gain.setValueAtTime(0.3, now + delay);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + delay + 0.2);
+    osc.start(now + delay);
+    osc.stop(now + delay + 0.2);
+  });
+}
+
+// ── 本地存储：今日番茄数 ──
+function loadTodayCount() {
+  const key = 'pomodoro_' + new Date().toISOString().slice(0, 10);
+  return parseInt(localStorage.getItem(key) || '0', 10);
+}
+
+function saveTodayCount() {
+  const key = 'pomodoro_' + new Date().toISOString().slice(0, 10);
+  localStorage.setItem(key, todayCount);
+}
+</script>
+
+</body>
+</html>
