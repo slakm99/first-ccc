@@ -1,0 +1,6 @@
+User-Agent: *
+Allow: /
+Disallow: /api/
+Disallow: /_next/
+
+Sitemap: https://portfolio-slakm99s-projects.vercel.app/sitemap.xml
